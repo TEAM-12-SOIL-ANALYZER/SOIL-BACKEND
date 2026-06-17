@@ -3,5 +3,5 @@ builder = "NIXPACKS"
 buildCommand = "pip install -r requirements.txt"
 
 [deploy]
-startCommand = "gunicorn main:app"
+startCommand = "gunicorn --bind 0.0.0.0:$PORT main:app"
 restartPolicyType = "ON_FAILURE"
