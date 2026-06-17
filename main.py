@@ -11,8 +11,12 @@ import pandas as pd
 import tensorflow as tf
 
 app = Flask(__name__)
-# Enable CORS for Wasmer frontend
-CORS(app)
+# Enable CORS for Wasmer frontend (cross-origin requests)
+CORS(app, resources={r"/api/*": {
+    "origins": "*",
+    "methods": ["GET", "POST", "OPTIONS"],
+    "allow_headers": ["Content-Type", "Authorization"]
+}})
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), 'model', 'soil_model007.keras')
 CSV_PATH = os.path.join(os.path.dirname(__file__), 'data', 'data_core.csv')
