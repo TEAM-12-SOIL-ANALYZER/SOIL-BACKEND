@@ -37,6 +37,10 @@ except Exception as e:
 # Adjust these based on your model's actual training classes
 CLASS_NAMES = ['Black', 'Clayey', 'Loamy', 'Red', 'Sandy']
 
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({"status": "Soil Classifier API is running!"})
+
 @app.route('/api/classify', methods=['POST'])
 def classify():
     try:
