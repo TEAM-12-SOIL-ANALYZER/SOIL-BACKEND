@@ -218,20 +218,55 @@ def _load_model(path: str):
 
 
 def _build_crop_lookup(csv_path: str) -> dict:
-    """Build a mapping: soil_type → list of unique crop types from the CSV."""
-    df = pd.read_csv(csv_path)
-    # Normalise column names (strip whitespace)
-    df.columns = df.columns.str.strip()
-    lookup = {}
-    for soil in df["Soil Type"].unique():
-        crops = (
-            df.loc[df["Soil Type"] == soil, "Crop Type"]
-            .dropna()
-            .unique()
-            .tolist()
-        )
-        lookup[soil] = sorted(crops)
-    return lookup
+    """Build a mapping: soil_type → list of unique crop types from the CSV.
+
+    The CSV dataset contains every crop under every soil type, so a naive
+    groupby returns identical lists.  To provide *useful* recommendations we
+    rank crops per soil by how frequently they appear and keep only the top
+    ones (those whose share within a soil type is above a threshold).  If the
+    data is still too uniform we fall back to curated agronomic defaults.
+    """
+    # Curated agronomic defaults — used when the CSV cannot discriminate.
+    AGRONOMIC_DEFAULTS: dict[str, list[str]] = {
+        "Black":  ["Cotton", "Sugarcane", "Wheat", "Oil seeds", "Pulses"],
+        "Clayey": ["Paddy", "Wheat", "Pulses", "Sugarcane"],
+        "Loamy":  ["Wheat", "Sugarcane", "Cotton", "Maize", "Pulses", "Oil seeds"],
+        "Red":    ["Ground Nuts", "Tobacco", "Millets", "Cotton", "Pulses"],
+        "Sandy":  ["Barley", "Millets", "Maize", "Ground Nuts"],
+    }
+
+    try:
+        df = pd.read_csv(csv_path)
+        df.columns = df.columns.str.strip()
+
+        lookup: dict[str, list[str]] = {}
+        for soil in df["Soil Type"].unique():
+            soil_df = df.loc[df["Soil Type"] == soil, "Crop Type"].dropna()
+            total = len(soil_df)
+            if total == 0:
+                lookup[soil] = AGRONOMIC_DEFAULTS.get(soil, [])
+                continue
+
+            freq = soil_df.value_counts(normalize=True)
+            # Keep crops that appear ≥ 12 % of the time for this soil
+            top_crops = freq[freq >= 0.12].index.tolist()
+
+            # If the CSV is too uniform (every crop passes), use defaults
+            all_crops = soil_df.unique().tolist()
+            if len(top_crops) == 0 or len(top_crops) == len(all_crops):
+                lookup[soil] = AGRONOMIC_DEFAULTS.get(soil, sorted(all_crops))
+            else:
+                lookup[soil] = sorted(top_crops)
+
+        # Ensure every known class has an entry
+        for soil, crops in AGRONOMIC_DEFAULTS.items():
+            lookup.setdefault(soil, crops)
+
+        return lookup
+
+    except Exception as exc:
+        logger.warning("Could not build crop lookup from CSV: %s — using agronomic defaults.", exc)
+        return AGRONOMIC_DEFAULTS
 
 
 # ---------------------------------------------------------------------------
